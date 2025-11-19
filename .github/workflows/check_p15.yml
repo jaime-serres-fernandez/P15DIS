@@ -1,0 +1,71 @@
+name: Check P15
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: self-hosted
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+
+    - name: Fetch all remote branches and tags
+      run: |
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        git fetch --all --tags --prune  
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Setup Java (with Maven cache)
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        cache: 'maven'
+
+  
+    - name: Verify Docker is available
+      run: |
+        docker --version
+        docker-compose --version || docker compose version
+        
+      
+    - name: Check for required files
+      run: |
+        echo "Verificando estructura del proyecto P15..."
+        [ -d "backend" ] && echo "✓ backend/ encontrado" || echo "✗ backend/ NO encontrado"
+        [ -d "frontend" ] && echo "✓ frontend/ encontrado" || echo "✗ frontend/ NO encontrado"
+        [ -f "grades/p15.py" ] && echo "✓ Evaluador p15.py encontrado" || echo "✗ Evaluador p15.py NO encontrado"
+        [ -f "docker-compose.yml" ] && echo "✓ docker-compose.yml encontrado" || echo "✗ docker-compose.yml NO encontrado"
+        
+    - name: Grade P15
+      run: python3 grades/p15.py
+      env:
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      
+    - name: Save CSV to notes folder
+      run: |
+        mkdir -p /srv/notas/P15
+        ALUMNO=$(echo "${{github.repository}}" | cut -d'/' -f2 | sed -E 's/^(dis|DIS)-?p15-?//')
+        cp resultados.csv /srv/notas/P15/${ALUMNO}.csv
+        echo "✅ Resultados guardados para: ${ALUMNO}"
+        
+    - name: Display Results
+      if: always()
+      run: |
+        if [ -f "resultados.csv" ]; then
+          echo "📊 Resultados de la evaluación:"
+          cat resultados.csv
+        else
+          echo "⚠️ No se generó el archivo de resultados"
+        fi
